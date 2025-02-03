@@ -17,7 +17,7 @@ const animeSchema: Schema = new mongoose.Schema({
   animeImage: { type: String, required: true },
   animeVideo: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "animeVideo",
+    ref: "AnimeVideo",
     required: true,
   },
   rating: { type: Number, required: true },
@@ -26,5 +26,5 @@ const animeSchema: Schema = new mongoose.Schema({
   quality: { type: String, required: true },
 });
 
-const anime = mongoose.model<Ianime>("anime", animeSchema);
-export default anime;
+const Anime = mongoose.model<Ianime>("anime", animeSchema);
+export default Anime;

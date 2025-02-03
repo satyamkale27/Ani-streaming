@@ -9,6 +9,6 @@ const videoScheme: Schema = new mongoose.Schema({
   url: { type: String, required: true },
 });
 
-const animeVideo = mongoose.model<IVideo>("animeVideo", videoScheme);
+const AnimeVideo = mongoose.model<IVideo>("animeVideo", videoScheme);
 
-export default animeVideo;
+export default AnimeVideo;
