@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express from "express";
 import { NODE_ENV, PORT, MONGO_URI } from "./helpers/envConfig.js";
 import morgan from "morgan";
 import cors from "cors";
@@ -6,8 +6,6 @@ import helmet from "helmet";
 import connectDb from "./helpers/connectDb.js";
 import compression from "compression";
 import { errorMiddleware } from "./middlewares/errors/errorMiddleware.js";
-import redisClient from "./helpers/redisClient.js";
-import asyncHandler from "./middlewares/tryCatch.js";
 import animeRouter from "./routes/anime.route.js";
 
 // Allowed origins for CORS
@@ -52,41 +50,6 @@ app.use(
 app.get("/", (_, res) => {
   res.send("Server is running!");
 });
-
-app.get("/api/data", (_, res) => {
-  res.status(200).json({ message: "Data from the server" });
-});
-
-function yourDbQuery() {
-  console.log("DO SOME TASK HERE (LIKE DB QUERY)");
-}
-
-// Redis Cache-based route
-app.get(
-  "/api/route",
-  asyncHandler(async (_: Request, res: Response) => {
-    // Step 1: Check if the data is already in the cache
-    const cachedData = await redisClient.get("yourCacheKey");
-
-    if (cachedData) {
-      // Step 2: If cache is found, serve data from cache
-      console.log("Data served from cache");
-      return res
-        .status(200)
-        .json({ message: "Data from cache", data: JSON.parse(cachedData) });
-    }
-
-    // Step 3: If cache is missed, perform the actual DB query or heavy operation
-    const data = await yourDbQuery();
-
-    // Step 4: Store the freshly fetched/generated data in the cache (with an expiration time)
-    redisClient.set("yourCacheKey", JSON.stringify(data), "EX", 60); // Cache for 60 seconds
-
-    // Step 5: Serve the freshly generated data to the client
-    console.log("Data served from the server");
-    return res.status(200).json({ message: "Data from the server", data });
-  })
-);
 
 app.use("/api", animeRouter);
 

@@ -8,6 +8,7 @@ import {
   AWS_REGION,
   AWS_SECRET_ACCESS_KEY,
 } from "./envConfig";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 interface S3ClientConfig {
   region: string;
@@ -51,4 +52,25 @@ const uploadToS3 = async (
     })
   );
 };
-export { s3Client, deleteFiles3, uploadToS3 };
+
+async function generatePresignedUrl(
+  bucketName: string,
+  key: string,
+  contentType: string
+) {
+  const params = {
+    Bucket: bucketName,
+    Key: key,
+    ContentType: contentType, // Replace with the appropriate content type for your file
+  };
+
+  // Create the PutObjectCommand
+  const command = new PutObjectCommand(params);
+
+  const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+  return signedUrl;
+}
+
+export { s3Client, deleteFiles3, uploadToS3, generatePresignedUrl };
+
