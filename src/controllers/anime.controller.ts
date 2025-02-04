@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import asyncHandler from "../middlewares/tryCatch";
 import Anime from "../models/anime.mongo";
+import Comment from "../models/comments.mongo";
 import { CustomError } from "../middlewares/errors/CustomError";
 import {
   checkAnimeExists,
@@ -14,7 +15,6 @@ import {
 } from "../helpers/envConfig";
 import { generatePresignedUrl, uploadToS3 } from "../helpers/s3";
 import sendMessage from "../helpers/rabbitmq-producer";
-
 
 interface AnimeRequestBody {
   animeName: string;
@@ -95,15 +95,15 @@ export const addAnime = asyncHandler(
 
 export const generatePresignedUrlsForFileUpload = asyncHandler(
   async (req: Request, res: Response) => {
-    const { filename, filetype,animeId } = req.body;
+    const { filename, filetype, animeId } = req.body;
 
     // Check if files exist
     if (!filename || !filetype) {
       throw new CustomError("file Details are required", 400);
     }
-  
+
     const uploadedFileName = getUniqueMediaName(filename);
-    const path = `${animeId}/${uploadedFileName}`
+    const path = `${animeId}/${uploadedFileName}`;
 
     const presignedUrl = await generatePresignedUrl(
       AWS_VIDEO_BUCKET,
@@ -125,11 +125,11 @@ export const addDataAndStartViedoTranscoding = asyncHandler(
   async (req: Request, res: Response) => {
     const { filename } = req.body;
 
-    console.log(req.body, "req.body")
+    console.log(req.body, "req.body");
 
     const data = {
       filename,
-      bucket: AWS_VIDEO_BUCKET
+      bucket: AWS_VIDEO_BUCKET,
     };
     sendMessage(data).catch((err) => console.error("error", err));
 
@@ -141,5 +141,36 @@ export const addDataAndStartViedoTranscoding = asyncHandler(
     console.log(response, "response");
 
     res.status(200).json(response);
+  }
+);
+
+export const createComment = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { videoId, userId, comment, isSpoiler } = req.body;
+
+    if (!videoId || !userId || !comment || !isSpoiler)
+      throw new CustomError("All fields are required");
+
+    const commentobj = new Comment({
+      videoId,
+      userId,
+      comment,
+      isSpoiler,
+    });
+
+    await commentobj.save();
+
+    const commentResponse = {
+      id: commentobj._id,
+      videoId: commentobj.videoId,
+      comment: commentobj.comment,
+      isSpoiler: commentobj.isSpoiler,
+    };
+
+    res.status(201).json({
+      success: true,
+      message: "Comment added successfully. ",
+      comment: commentResponse,
+    });
   }
 );

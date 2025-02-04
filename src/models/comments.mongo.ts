@@ -8,10 +8,10 @@ interface Icomments extends Document {
 }
 
 const commentSchema = new mongoose.Schema({
-  videoId: { type: String, required: true },
-  userId: { type: String, required: true },
+  videoId: { type: String, required: true, unique: true },
+  userId: { type: String, required: true, unique: true },
   comment: { type: String, required: true },
-  isSpoiler: { type: Boolean, required: true },
+  isSpoiler: { type: Boolean },
 });
 
 const Comment = mongoose.model<Icomments>("Comment", commentSchema);
