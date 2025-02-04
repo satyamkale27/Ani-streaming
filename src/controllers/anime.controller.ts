@@ -7,8 +7,15 @@ import {
   getMediasUrls,
   getUniqueMediaName,
 } from "../helpers/utils";
-import { AWS_BUCKET_NAME, PROFILE_URL } from "../helpers/envConfig";
-import { uploadToS3 } from "../helpers/s3";
+import {
+  AWS_BUCKET_NAME,
+  AWS_VIDEO_BUCKET,
+  PROFILE_URL,
+} from "../helpers/envConfig";
+import { generatePresignedUrl, uploadToS3 } from "../helpers/s3";
+import sendMessage from "../helpers/rabbitmq-producer";
+
+
 interface AnimeRequestBody {
   animeName: string;
   description: string;
@@ -83,5 +90,56 @@ export const addAnime = asyncHandler(
       message: "Anime has been successfully added.",
       anime: animeResponse,
     });
+  }
+);
+
+export const generatePresignedUrlsForFileUpload = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { filename, filetype,animeId } = req.body;
+
+    // Check if files exist
+    if (!filename || !filetype) {
+      throw new CustomError("file Details are required", 400);
+    }
+  
+    const uploadedFileName = getUniqueMediaName(filename);
+    const path = `${animeId}/${uploadedFileName}`
+
+    const presignedUrl = await generatePresignedUrl(
+      AWS_VIDEO_BUCKET,
+      path,
+      filetype
+    );
+
+    // Respond with presigned URLs and post content data
+    return res.status(200).json({
+      success: true,
+      message: "Presigned URLs generated successfully",
+      filename: path,
+      presignedUrl,
+    });
+  }
+);
+
+export const addDataAndStartViedoTranscoding = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { filename } = req.body;
+
+    console.log(req.body, "req.body")
+
+    const data = {
+      filename,
+      bucket: AWS_VIDEO_BUCKET
+    };
+    sendMessage(data).catch((err) => console.error("error", err));
+
+    const response = {
+      success: true,
+      message: "Video Proccessing Started.",
+    };
+
+    console.log(response, "response");
+
+    res.status(200).json(response);
   }
 );
