@@ -12,6 +12,7 @@ import {
 import {
   AWS_BUCKET_NAME,
   AWS_VIDEO_BUCKET,
+  AWS_VIDEO_URL,
   PROFILE_URL,
 } from "../helpers/envConfig";
 import { generatePresignedUrl, uploadToS3 } from "../helpers/s3";
@@ -29,7 +30,7 @@ interface AnimeRequestBody {
 
 function generateStringIdForAnime(name: string) {
   // Convert name to lowercase and replace spaces with hyphens
-  let modifiedName = name.toLowerCase().replace(/\s+/g, '-');
+  let modifiedName = name.toLowerCase().replace(/\s+/g, "-");
 
   // Generate a random number to append to the name (you can change the range as needed)
   const randomNum = Math.floor(Math.random() * 10000) + 1000; // Generates a number between 1000 and 1999
@@ -37,7 +38,6 @@ function generateStringIdForAnime(name: string) {
   // Return the final modified name with the random number
   return `${modifiedName}-${randomNum}`;
 }
-
 
 export const addAnime = asyncHandler(
   async (req: Request<{}, {}, AnimeRequestBody>, res: Response) => {
@@ -48,15 +48,9 @@ export const addAnime = asyncHandler(
       totalEpisodes,
       animeType,
       quality,
-    } = req.body
+    } = req.body;
 
-    if (
-      !animeName ||
-      !description ||
-      !rating ||
-      !animeType ||
-      !quality
-    ) {
+    if (!animeName || !description || !rating || !animeType || !quality) {
       throw new CustomError("All fields are required", 400);
     }
     if (!req.file) {
@@ -99,7 +93,6 @@ export const addAnime = asyncHandler(
       animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
     };
 
-
     res.status(201).json({
       success: true,
       message: "Anime has been successfully added.",
@@ -136,11 +129,40 @@ export const generatePresignedUrlsForFileUpload = asyncHandler(
   }
 );
 
-export const addDataAndStartViedoTranscoding = asyncHandler(
+export const createEpisodeAndStartVideoProcessing = asyncHandler(
   async (req: Request, res: Response) => {
-    const { filename } = req.body;
+    const { animeId } = req.params
+    const { filename, episodeName } = req.body;
+
+    if (!animeId) {
+      throw new CustomError("animeId is required", 400);
+    }
+
+    if (!filename || !episodeName) {
+      throw new CustomError("All fields are required", 400);
+    }
+
+    const anime = await Anime.findOne({ animeId });
+    if (!anime) {
+      throw new CustomError("Anime not found", 404);
+    }
+
+    const totalEpisodes = anime.animeVideo.length
+
+    const animeVideo = new AnimeVideo({
+      episodeName,
+      url: filename,
+      animeId: anime._id,
+      EpisodeNo: totalEpisodes + 1,
+    });
+
+    await animeVideo.save()
+    await Anime.findByIdAndUpdate(anime._id, {
+      $push: { animeVideo: animeVideo._id },
+    });
 
     const data = {
+      animeVideoId: animeVideo._id,
       filename,
       bucket: AWS_VIDEO_BUCKET,
     };
@@ -188,41 +210,77 @@ export const createComment = asyncHandler(
   }
 );
 
-export const getAnimeById = asyncHandler(async (req: Request, res: Response) => {
-  const { animeId } = req.params;
+export const getAnimeById = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { animeId } = req.params;
 
-  if (!animeId) {
-    throw new CustomError("animeId is required", 400);
+    if (!animeId) {
+      throw new CustomError("animeId is required", 400);
+    }
+
+    // Try to get the anime from Redis cache first
+    let anime = await redisClient.get(animeId);
+
+    if (!anime) {
+      // If not found in Redis, query the database
+      anime = await Anime.findOne({ animeId });
+      if (!anime) {
+        throw new CustomError("Anime not found", 404);
+      }
+
+      // Format the response object
+      const formatResponseAnime = {
+        ...anime?.toObject(),
+        animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
+      };
+
+      console.log("found in db");
+      // Cache the result in Redis for future requests
+      await redisClient.set(animeId, JSON.stringify(formatResponseAnime));
+      await redisClient.expire(animeId, 1200);
+
+      return res
+        .status(200)
+        .json({ success: true, anime: formatResponseAnime });
+    }
+
+    console.log("found in redis");
+
+    // If found in Redis, parse and return the cached anime
+    return res.status(200).json({ success: true, anime: JSON.parse(anime) });
   }
+);
 
-  // Try to get the anime from Redis cache first
-  let anime = await redisClient.get(animeId);
+export const getAllEpisodes = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { animeId } = req.params;
+    if (!animeId) {
+      throw new CustomError("animeId is required", 400);
+    }
 
-  if (!anime) {
-    // If not found in Redis, query the database
-    anime = await Anime.findOne({ animeId });
+    const cacheKey = `episodes:${animeId}`;
+    let cachedAnime = await redisClient.get(cacheKey);
+
+    if (cachedAnime) {
+      return res.status(200).json({ success: true, anime: JSON.parse(cachedAnime) });
+    }
+
+    const anime = await Anime.findOne({ animeId }).populate("animeVideo");
     if (!anime) {
       throw new CustomError("Anime not found", 404);
     }
 
-    // Format the response object
-    const formatResponseAnime = {
-      ...anime?.toObject(),
+    const formattedAnime = {
+      ...anime.toObject(),
       animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
+      animeVideo: anime.animeVideo.map((video: any) => ({
+        ...video.toObject(),
+        url: getMediasUrls(AWS_VIDEO_URL, video.url),
+      })),
     };
 
-    console.log("found in db")
-    // Cache the result in Redis for future requests
-    await redisClient.set(animeId, JSON.stringify(formatResponseAnime));
-    await redisClient.expire(animeId, 1200);
-    
-    return res.status(200).json({ success: true, anime: formatResponseAnime });
+    await redisClient.setex(cacheKey, 1200, JSON.stringify(formattedAnime));
+
+    res.status(200).json({ success: true, anime: formattedAnime });
   }
-
-  console.log("found in redis")
-
-  // If found in Redis, parse and return the cached anime
-  return res.status(200).json({ success: true, anime: JSON.parse(anime) });
-});
-
-
+)

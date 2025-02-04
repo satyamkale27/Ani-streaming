@@ -1,10 +1,11 @@
 import { Router } from "express";
 import {
   addAnime,
-  addDataAndStartViedoTranscoding,
   createComment,
+  createEpisodeAndStartVideoProcessing,
   generatePresignedUrlsForFileUpload,
-  getAnimeById
+  getAnimeById,
+  getAllEpisodes
 } from "../controllers/anime.controller";
 import upload from "../middlewares/multer";
 
@@ -14,7 +15,8 @@ animeRouter.post("/createComment", createComment);
 
 animeRouter.post("/generate-presigned-urls", generatePresignedUrlsForFileUpload)
 animeRouter.get("/anime/:animeId",getAnimeById)
-animeRouter.post("/uploadepisode/anime/:animeId",addDataAndStartViedoTranscoding)
+animeRouter.post("/uploadepisode/anime/:animeId",createEpisodeAndStartVideoProcessing)
+animeRouter.get("/getAllEpisodes/:animeId",getAllEpisodes)
 
 export default animeRouter;
 
