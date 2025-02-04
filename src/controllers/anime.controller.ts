@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import asyncHandler from "../middlewares/tryCatch";
 import Anime from "../models/anime.mongo";
+import AnimeVideo from "../models/videos.mongo";
 import Comment from "../models/comments.mongo";
 import { CustomError } from "../middlewares/errors/CustomError";
 import {
@@ -148,7 +149,7 @@ export const createComment = asyncHandler(
   async (req: Request, res: Response) => {
     const { videoId, userId, comment, isSpoiler } = req.body;
 
-    if (!videoId || !userId || !comment || !isSpoiler)
+    if (!videoId || !userId || !comment)
       throw new CustomError("All fields are required");
 
     const commentobj = new Comment({
@@ -160,11 +161,12 @@ export const createComment = asyncHandler(
 
     await commentobj.save();
 
+    await AnimeVideo.findByIdAndUpdate(videoId, {
+      $push: { comments: commentobj._id },
+    });
+
     const commentResponse = {
       id: commentobj._id,
-      videoId: commentobj.videoId,
-      comment: commentobj.comment,
-      isSpoiler: commentobj.isSpoiler,
     };
 
     res.status(201).json({
