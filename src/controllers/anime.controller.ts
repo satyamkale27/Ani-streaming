@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import asyncHandler from "../middlewares/tryCatch";
 import Anime from "../models/anime.mongo";
 import AnimeVideo from "../models/videos.mongo";
@@ -16,6 +16,7 @@ import {
 } from "../helpers/envConfig";
 import { generatePresignedUrl, uploadToS3 } from "../helpers/s3";
 import sendMessage from "../helpers/rabbitmq-producer";
+import redisClient from "../helpers/redisClient";
 
 interface AnimeRequestBody {
   animeName: string;
@@ -26,24 +27,33 @@ interface AnimeRequestBody {
   quality: string;
 }
 
+function generateStringIdForAnime(name: string) {
+  // Convert name to lowercase and replace spaces with hyphens
+  let modifiedName = name.toLowerCase().replace(/\s+/g, '-');
+
+  // Generate a random number to append to the name (you can change the range as needed)
+  const randomNum = Math.floor(Math.random() * 10000) + 1000; // Generates a number between 1000 and 1999
+
+  // Return the final modified name with the random number
+  return `${modifiedName}-${randomNum}`;
+}
+
+
 export const addAnime = asyncHandler(
   async (req: Request<{}, {}, AnimeRequestBody>, res: Response) => {
     const {
       animeName,
       description,
-      // animeVideo,
       rating,
       totalEpisodes,
       animeType,
       quality,
-    } = req.body;
-    // console.log(req.body);
+    } = req.body
 
     if (
       !animeName ||
       !description ||
       !rating ||
-      !totalEpisodes ||
       !animeType ||
       !quality
     ) {
@@ -58,10 +68,11 @@ export const addAnime = asyncHandler(
     const animeImage = getUniqueMediaName(req.file.originalname);
 
     const anime = new Anime({
+      animeId: generateStringIdForAnime(animeName),
       animeName,
       description,
       rating,
-      totalEpisodes,
+      // totalEpisodes,
       animeType,
       quality,
       animeImage,
@@ -78,6 +89,7 @@ export const addAnime = asyncHandler(
     ]);
 
     const animeResponse = {
+      animeId: anime.animeId,
       id: anime._id,
       animeName: anime.animeName,
       description: anime.description,
@@ -86,6 +98,8 @@ export const addAnime = asyncHandler(
       quality: anime.quality,
       animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
     };
+
+
     res.status(201).json({
       success: true,
       message: "Anime has been successfully added.",
@@ -126,8 +140,6 @@ export const addDataAndStartViedoTranscoding = asyncHandler(
   async (req: Request, res: Response) => {
     const { filename } = req.body;
 
-    console.log(req.body, "req.body");
-
     const data = {
       filename,
       bucket: AWS_VIDEO_BUCKET,
@@ -139,11 +151,10 @@ export const addDataAndStartViedoTranscoding = asyncHandler(
       message: "Video Proccessing Started.",
     };
 
-    console.log(response, "response");
-
     res.status(200).json(response);
   }
 );
+
 
 export const createComment = asyncHandler(
   async (req: Request, res: Response) => {
@@ -176,3 +187,42 @@ export const createComment = asyncHandler(
     });
   }
 );
+
+export const getAnimeById = asyncHandler(async (req: Request, res: Response) => {
+  const { animeId } = req.params;
+
+  if (!animeId) {
+    throw new CustomError("animeId is required", 400);
+  }
+
+  // Try to get the anime from Redis cache first
+  let anime = await redisClient.get(animeId);
+
+  if (!anime) {
+    // If not found in Redis, query the database
+    anime = await Anime.findOne({ animeId });
+    if (!anime) {
+      throw new CustomError("Anime not found", 404);
+    }
+
+    // Format the response object
+    const formatResponseAnime = {
+      ...anime?.toObject(),
+      animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
+    };
+
+    console.log("found in db")
+    // Cache the result in Redis for future requests
+    await redisClient.set(animeId, JSON.stringify(formatResponseAnime));
+    await redisClient.expire(animeId, 1200);
+    
+    return res.status(200).json({ success: true, anime: formatResponseAnime });
+  }
+
+  console.log("found in redis")
+
+  // If found in Redis, parse and return the cached anime
+  return res.status(200).json({ success: true, anime: JSON.parse(anime) });
+});
+
+

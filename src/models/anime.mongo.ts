@@ -1,10 +1,11 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 interface Ianime extends Document {
+  animeId: string
   animeName: string;
   description: string;
   animeImage: string;
-  // animeVideo: mongoose.Schema.Types.ObjectId[];
+  animeVideo: mongoose.Schema.Types.ObjectId[];
   rating: number;
   totalEpisodes: number;
   animeType: string;
@@ -12,16 +13,21 @@ interface Ianime extends Document {
 }
 
 const animeSchema: Schema = new mongoose.Schema({
+  animeId: { type: String, required: true },
   animeName: { type: String, required: true },
   description: { type: String, required: true },
   animeImage: { type: String, required: true },
-  // animeVideo: [
-  //   {
-  //     type: mongoose.Schema.Types.ObjectId,
-  //     ref: "AnimeVideo",
-  //     // required: true,
-  //   },
-  // ],
+  animeVideo: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AnimeVideo",
+
+    },
+  ],
+  moreSeasons: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Anime",
+  }],
   rating: { type: Number, required: true },
   totalEpisodes: { type: Number, required: true },
   animeType: { type: String, required: true },

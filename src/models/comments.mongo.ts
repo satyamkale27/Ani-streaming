@@ -8,8 +8,8 @@ interface Icomments extends Document {
 }
 
 const commentSchema = new mongoose.Schema({
-  videoId: { type: String, required: true, unique: true },
-  userId: { type: String, required: true, unique: true },
+  videoId: { type: mongoose.Schema.Types.ObjectId,ref:"AnimeVideo", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId,ref:"User", required: true },
   comment: { type: String, required: true },
   isSpoiler: { type: Boolean, default: false },
 });
