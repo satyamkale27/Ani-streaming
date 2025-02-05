@@ -10,6 +10,8 @@ interface Ianime extends Document {
   totalEpisodes: number;
   animeType: string;
   quality: string;
+  genre: string[];
+  publishedAt: string;
 }
 
 const animeSchema: Schema = new mongoose.Schema({
@@ -17,6 +19,8 @@ const animeSchema: Schema = new mongoose.Schema({
   animeName: { type: String, required: true },
   description: { type: String, required: true },
   animeImage: { type: String, required: true },
+  genre: [{ type: String }],
+
   animeVideo: [
     {
       type: mongoose.Schema.Types.ObjectId,
@@ -24,6 +28,7 @@ const animeSchema: Schema = new mongoose.Schema({
 
     },
   ],
+  publishedAt: { type: String },
   moreSeasons: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Anime",
