@@ -5,7 +5,8 @@ import {
   createEpisodeAndStartVideoProcessing,
   generatePresignedUrlsForFileUpload,
   getAnimeById,
-  getAllEpisodes
+  getAllEpisodes,
+  getAllAnimes
 } from "../controllers/anime.controller";
 import upload from "../middlewares/multer";
 
@@ -17,6 +18,7 @@ animeRouter.post("/generate-presigned-urls", generatePresignedUrlsForFileUpload)
 animeRouter.get("/anime/:animeId",getAnimeById)
 animeRouter.post("/uploadepisode/anime/:animeId",createEpisodeAndStartVideoProcessing)
 animeRouter.get("/getAllEpisodes/:animeId",getAllEpisodes)
+animeRouter.get("/getAllAnimes",getAllAnimes)
 
 export default animeRouter;
 
