@@ -131,7 +131,7 @@ export const generatePresignedUrlsForFileUpload = asyncHandler(
 
 export const createEpisodeAndStartVideoProcessing = asyncHandler(
   async (req: Request, res: Response) => {
-    const { animeId } = req.params
+    const { animeId } = req.params;
     const { filename, episodeName } = req.body;
 
     if (!animeId) {
@@ -147,7 +147,7 @@ export const createEpisodeAndStartVideoProcessing = asyncHandler(
       throw new CustomError("Anime not found", 404);
     }
 
-    const totalEpisodes = anime.animeVideo.length
+    const totalEpisodes = anime.animeVideo.length;
 
     const animeVideo = new AnimeVideo({
       episodeName,
@@ -156,7 +156,7 @@ export const createEpisodeAndStartVideoProcessing = asyncHandler(
       EpisodeNo: totalEpisodes + 1,
     });
 
-    await animeVideo.save()
+    await animeVideo.save();
     await Anime.findByIdAndUpdate(anime._id, {
       $push: { animeVideo: animeVideo._id },
     });
@@ -176,7 +176,6 @@ export const createEpisodeAndStartVideoProcessing = asyncHandler(
     res.status(200).json(response);
   }
 );
-
 
 export const createComment = asyncHandler(
   async (req: Request, res: Response) => {
@@ -229,19 +228,17 @@ export const getAnimeById = asyncHandler(
       }
 
       // Format the response object
-      const formatResponseAnime = {
-        ...anime?.toObject(),
-        animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
-      };
+      // const formatResponseAnime = {
+      //   ...anime?.toObject(),
+      //   animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
+      // };
 
       console.log("found in db");
       // Cache the result in Redis for future requests
-      await redisClient.set(animeId, JSON.stringify(formatResponseAnime));
+      await redisClient.set(animeId, JSON.stringify(anime));
       await redisClient.expire(animeId, 1200);
 
-      return res
-        .status(200)
-        .json({ success: true, anime: formatResponseAnime });
+      return res.status(200).json({ success: true, anime: anime });
     }
 
     console.log("found in redis");
@@ -262,7 +259,9 @@ export const getAllEpisodes = asyncHandler(
     let cachedAnime = await redisClient.get(cacheKey);
 
     if (cachedAnime) {
-      return res.status(200).json({ success: true, anime: JSON.parse(cachedAnime) });
+      return res
+        .status(200)
+        .json({ success: true, anime: JSON.parse(cachedAnime) });
     }
 
     const anime = await Anime.findOne({ animeId }).populate("animeVideo");
@@ -272,7 +271,7 @@ export const getAllEpisodes = asyncHandler(
 
     const formattedAnime = {
       ...anime.toObject(),
-      animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
+      // animeImage: getMediasUrls(PROFILE_URL, anime.animeImage),
       animeVideo: anime.animeVideo.map((video: any) => ({
         ...video.toObject(),
         url: getMediasUrls(AWS_VIDEO_URL, video.url),
@@ -283,4 +282,23 @@ export const getAllEpisodes = asyncHandler(
 
     res.status(200).json({ success: true, anime: formattedAnime });
   }
-)
+);
+
+export const getAllAnimes = asyncHandler(
+  async (req: Request, res: Response) => {
+    const cacheKey = `animes`;
+    let cachedAnime = await redisClient.get(cacheKey);
+    if (cachedAnime) {
+      return res
+        .status(200)
+        .json({ success: true, anime: JSON.parse(cachedAnime) });
+    }
+    const anime = await Anime.find();
+
+    if (anime.length === 0) {
+      return res.status(200).json({ success: true, anime: [] });
+    }
+    await redisClient.setex(cacheKey, 1200, JSON.stringify(anime));
+    res.status(200).json({ success: true, anime: anime });
+  }
+);
